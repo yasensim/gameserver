@@ -26,6 +26,7 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Printf("%d users loaded\n", len(userMap.m))
 }
 
 func loadUserMap() (map[int]users.User, error) {
