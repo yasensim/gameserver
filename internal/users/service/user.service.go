@@ -1,11 +1,13 @@
 package service
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/yasensim/gameserver/internal/users"
@@ -38,8 +40,10 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 func FindUser(email, password string) (*users.User, error) {
 	user := &users.User{}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
 
-	row := usersDb.QueryRow("select id,name,email,password from users where email = ?", email)
+	row := usersDb.QueryRowContext(ctx, "select id,name,email,password from users where email = ?", email)
 
 	err := row.Scan(&user.ID, &user.Name, &user.Email, &user.Password)
 
@@ -77,7 +81,10 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	user.Password = string(pass)
 
-	result, err := usersDb.Exec("insert into users(name,email,password)values(?,?,?)", user.Name, user.Email, user.Password)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	result, err := usersDb.ExecContext(ctx, "insert into users(name,email,password)values(?,?,?)", user.Name, user.Email, user.Password)
 
 	if err != nil {
 		log.Print("error occued CreateUser ", err.Error())
@@ -102,7 +109,10 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 func FetchUsers(w http.ResponseWriter, r *http.Request) {
 	var theUsers []users.User
 
-	rows, err := usersDb.Query("select id,name , email , password  from users")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	rows, err := usersDb.QueryContext(ctx, "select id,name , email , password  from users")
 	defer rows.Close()
 	if err != nil {
 		log.Print("error occued during FetchUsers ", err.Error())
@@ -125,7 +135,9 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	json.NewDecoder(r.Body).Decode(user)
 
-	result, err := usersDb.Exec("update users set name = ? , email= ? ,password = ? where id = ?", user.Name, user.Email, user.Password, id)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	result, err := usersDb.ExecContext(ctx, "update users set name = ? , email= ? ,password = ? where id = ?", user.Name, user.Email, user.Password, id)
 	if err != nil {
 		log.Print("error occued during user update ", err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
@@ -145,7 +157,10 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	var id = params["id"]
 
-	result, err := usersDb.Exec("delete from users where id = ?", id)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	result, err := usersDb.ExecContext(ctx, "delete from users where id = ?", id)
 	if err != nil {
 		log.Print("error occued during user delete ", err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
@@ -166,7 +181,10 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 	var id = params["id"]
 	var user users.User
 
-	row := usersDb.QueryRow("select id,name,email,password from users where id=?", id)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	row := usersDb.QueryRowContext(ctx, "select id,name,email,password from users where id=?", id)
 	err := row.Scan(&user.ID, &user.Name, &user.Email, &user.Password)
 
 	if err != nil {
