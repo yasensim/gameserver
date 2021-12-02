@@ -1,245 +1,178 @@
 package service
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
-	"sort"
-	"strconv"
-	"sync"
 
 	"github.com/gorilla/mux"
 	"github.com/yasensim/gameserver/internal/users"
+	"github.com/yasensim/gameserver/internal/users/db"
+	"golang.org/x/crypto/bcrypt"
 )
 
-// used to hold our user list in memory
-var userMap = struct {
-	sync.RWMutex
-	m map[int]users.User
-}{m: make(map[int]users.User)}
-
-func init() {
-	fmt.Println("loading users...")
-	m, err := loadUserMap()
-	userMap.m = m
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("%d users loaded...\n", len(userMap.m))
-}
-
-func loadUserMap() (map[int]users.User, error) {
-	fileName := "users.json"
-	_, err := os.Stat(fileName)
-	if os.IsNotExist(err) {
-		return nil, fmt.Errorf("file [%s] does not exist", fileName)
-	}
-
-	file, _ := ioutil.ReadFile(fileName)
-	userList := make([]users.User, 0)
-	err = json.Unmarshal([]byte(file), &userList)
-	if err != nil {
-		log.Fatal(err)
-	}
-	uMap := make(map[int]users.User)
-	for i := 0; i < len(userList); i++ {
-		uMap[int(userList[i].ID)] = userList[i]
-	}
-	return uMap, nil
-}
-
-func getUser(userID uint) *users.User {
-	userMap.RLock()
-	defer userMap.RUnlock()
-	if user, ok := userMap.m[int(userID)]; ok {
-		return &user
-	}
-	return nil
-}
-
-func removeUser(userID int) {
-	userMap.Lock()
-	defer userMap.Unlock()
-	delete(userMap.m, userID)
-}
-
-func getUserList() []users.User {
-	userMap.RLock()
-	users := make([]users.User, 0, len(userMap.m))
-	for _, value := range userMap.m {
-		users = append(users, value)
-	}
-	userMap.RUnlock()
-	return users
-}
-
-func getUserIds() []int {
-	userMap.RLock()
-	userIds := []int{}
-	for key := range userMap.m {
-		userIds = append(userIds, key)
-	}
-	userMap.RUnlock()
-	sort.Ints(userIds)
-	return userIds
-}
-
-func getNextUserID() int {
-	userIds := getUserIds()
-	return userIds[len(userIds)-1] + 1
-}
-
-func addOrUpdateUser(user users.User) (int, error) {
-	// if the user id is set, update, otherwise add
-	addOrUpdateID := -1
-	if user.ID > 0 {
-		oldUser := getUser(user.ID)
-		// if it exists, replace it, otherwise return error
-		if oldUser == nil {
-			return 0, fmt.Errorf("user id [%d] doesn't exist", user.ID)
-		}
-		addOrUpdateID = int(user.ID)
-	} else {
-		addOrUpdateID = getNextUserID()
-		user.ID = uint(addOrUpdateID)
-	}
-	userMap.Lock()
-	userMap.m[addOrUpdateID] = user
-	userMap.Unlock()
-	return addOrUpdateID, nil
-}
-
-func FindUser(email string, password string) (*users.User, error) {
-	for _, user := range getUserList() {
-		if user.Email == email && password == user.Password {
-			return &user, nil
-		}
-	}
-	return nil, errors.New("Invalid login credentials. Please try again")
-}
+var usersDb = db.Get()
 
 func Login(w http.ResponseWriter, r *http.Request) {
+
 	user := &users.User{}
 	err := json.NewDecoder(r.Body).Decode(user)
 	if err != nil {
-		var resp = map[string]interface{}{"status": false, "message": "Invalid request"}
-		json.NewEncoder(w).Encode(resp)
+		log.Println(err)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	currUser, err := FindUser(user.Email, user.Password)
 
 	if err != nil {
-		var resp = map[string]interface{}{"status": false, "message": err.Error()}
-		json.NewEncoder(w).Encode(resp)
+		log.Print("error occued FindUser ", err.Error())
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
-	//update those before sending back
-	user.Name = currUser.Name
-	user.ID = currUser.ID
+	var resp = map[string]interface{}{"status": true, "user": currUser}
+	json.NewEncoder(w).Encode(resp)
+}
+
+func FindUser(email, password string) (*users.User, error) {
+	user := &users.User{}
+
+	row := usersDb.QueryRow("select id,name,email,password from users where email = ?", email)
+
+	err := row.Scan(&user.ID, &user.Name, &user.Email, &user.Password)
+
+	if err == sql.ErrNoRows {
+		return nil, errors.New("Email address not found")
+	}
+
+	errf := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
+	if errf != nil { //Password does not match!
+		return nil, errors.New("Invalid login credentials. Please try again")
+	}
+
+	return user, nil
+}
+
+//CreateUser function -- create a new user
+func CreateUser(w http.ResponseWriter, r *http.Request) {
+
+	user := &users.User{}
+	json.NewDecoder(r.Body).Decode(user)
+
+	_, err := FindUser(user.Email, user.Password)
+
+	if err == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	pass, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	user.Password = string(pass)
+
+	result, err := usersDb.Exec("insert into users(name,email,password)values(?,?,?)", user.Name, user.Email, user.Password)
+
+	if err != nil {
+		log.Print("error occued CreateUser ", err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if id, e := result.LastInsertId(); e != nil {
+		log.Println("no rows affected")
+		return
+	} else {
+		user.ID = uint(id)
+	}
+
+	w.WriteHeader(http.StatusCreated)
 
 	var resp = map[string]interface{}{"status": true, "user": user}
 	json.NewEncoder(w).Encode(resp)
 }
 
-//CreateUser function -- create a new user
-func CreateUser(w http.ResponseWriter, r *http.Request) {
-	var user users.User
-	err := json.NewDecoder(r.Body).Decode(&user)
-	if err != nil {
-		log.Print(err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	_, err = addOrUpdateUser(user)
-	if err != nil {
-		log.Print(err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-}
-
 //FetchUser function
 func FetchUsers(w http.ResponseWriter, r *http.Request) {
-	usersList := getUserList()
-	j, err := json.Marshal(usersList)
+	var theUsers []users.User
+
+	rows, err := usersDb.Query("select id,name , email , password  from users")
+	defer rows.Close()
 	if err != nil {
-		log.Fatal(err)
+		log.Print("error occued during FetchUsers ", err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
-	_, err = w.Write(j)
-	if err != nil {
-		log.Fatal(err)
+
+	for rows.Next() {
+		var user users.User
+		rows.Scan(&user.ID, &user.Name, &user.Email, &user.Password)
+		theUsers = append(theUsers, user)
 	}
+	json.NewEncoder(w).Encode(theUsers)
 }
 
 func UpdateUser(w http.ResponseWriter, r *http.Request) {
-	userID := ParseURL(w, r)
-	if userID == 0 {
-		return
-	}
-	var user users.User
-	err := json.NewDecoder(r.Body).Decode(&user)
+	user := &users.User{}
+	params := mux.Vars(r)
+	var id = params["id"]
+
+	json.NewDecoder(r.Body).Decode(user)
+
+	result, err := usersDb.Exec("update users set name = ? , email= ? ,password = ? where id = ?", user.Name, user.Email, user.Password, id)
 	if err != nil {
-		log.Print(err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		log.Print("error occued during user update ", err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
 	}
-	if user.ID != uint(userID) {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	_, err = addOrUpdateUser(user)
+	num, err := result.RowsAffected()
 	if err != nil {
-		log.Print(err)
-		w.WriteHeader(http.StatusBadRequest)
+		log.Fatalf("couldnt update database ", err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	log.Println("number of rows affected is ", num)
+	json.NewEncoder(w).Encode(&user)
 }
 
 func DeleteUser(w http.ResponseWriter, r *http.Request) {
-	userID := ParseURL(w, r)
-	if userID == 0 {
+	params := mux.Vars(r)
+	var id = params["id"]
+
+	result, err := usersDb.Exec("delete from users where id = ?", id)
+	if err != nil {
+		log.Print("error occued during user delete ", err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	removeUser(userID)
+	_, err = result.RowsAffected()
+	if err != nil {
+		log.Print("couldnt update database ", err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode("User deleted")
 }
 
 func GetUser(w http.ResponseWriter, r *http.Request) {
-	userID := ParseURL(w, r)
-	if userID == 0 {
-		return
-	}
-	user := getUser(uint(userID))
-	if user == nil {
+	params := mux.Vars(r)
+	var id = params["id"]
+	var user users.User
+
+	row := usersDb.QueryRow("select id,name,email,password from users where id=?", id)
+	err := row.Scan(&user.ID, &user.Name, &user.Email, &user.Password)
+
+	if err != nil {
+		log.Print("error occued during user delete ", err.Error())
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	j, err := json.Marshal(user)
-	if err != nil {
-		log.Print(err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	_, err = w.Write(j)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func ParseURL(w http.ResponseWriter, r *http.Request) int {
-
-	vars := mux.Vars(r)
-	idstr := vars["id"]
-	userID, err := strconv.Atoi(idstr)
-
-	if err != nil {
-		log.Print(err)
-		w.WriteHeader(http.StatusNotFound)
-		return 0
-	}
-	return userID
+	json.NewEncoder(w).Encode(&user)
 }
