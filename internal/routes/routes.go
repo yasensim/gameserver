@@ -28,6 +28,10 @@ func greet(w http.ResponseWriter, r *http.Request) {
 // CommonMiddleware --Set content-type
 func CommonMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Printf("Req from middleware: %s \n", r.Header.Get("test"))
+		if len(r.Header.Get("test")) > 0 {
+			w.Header().Add("test", r.Header.Get("test"))
+		}
 		w.Header().Add("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
