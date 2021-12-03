@@ -2,25 +2,28 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	"github.com/yasensim/gameserver/internal/users"
+	"github.com/yasensim/gameserver/internal/users/auth"
 )
 
 var usersService *UsersService
 
 func Get() *UsersService {
 	if usersService == nil {
-		usersService = &UsersService{DB: GetUsersDataStore()}
+		usersService = &UsersService{DB: GetUsersDataStore(), JwtAuth: auth.GetAuthenticator()}
 		return usersService
 	}
 	return usersService
 }
 
 type UsersService struct {
-	DB users.UserDatastore
+	DB      users.UserDatastore
+	JwtAuth users.UserAuth
 }
 
 func (us *UsersService) Login(w http.ResponseWriter, r *http.Request) {
@@ -32,6 +35,7 @@ func (us *UsersService) Login(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	//	fmt.Printf("User: %s, Pass: %s", user.Email, user.Password)
 	currUser, err := us.DB.FindUser(user.Email, user.Password)
 
 	if err != nil {
@@ -39,8 +43,15 @@ func (us *UsersService) Login(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
+	tokenString, err := us.JwtAuth.GetTokenForUser(currUser)
 
-	var resp = map[string]interface{}{"status": true, "user": currUser}
+	http.SetCookie(w, &http.Cookie{
+		Name:       auth.TokenName,
+		Value:      tokenString,
+		Path:       "/",
+		RawExpires: "0",
+	})
+	var resp = map[string]interface{}{"status": true, "access-token": tokenString, "user": currUser}
 	json.NewEncoder(w).Encode(resp)
 }
 
@@ -56,14 +67,16 @@ func (us *UsersService) CreateUser(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
+	fmt.Printf("FROM Create User - User: %s, Pass: %s", user.Email, user.Password)
 	if err := us.DB.CreateUser(user); err != nil {
 		log.Print("error occued CreateUser ", err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
-	var resp = map[string]interface{}{"status": true, "user": user}
+
+	tokenString, err := us.JwtAuth.GetTokenForUser(user)
+	var resp = map[string]interface{}{"status": true, "user": user, "access-token": tokenString}
 	json.NewEncoder(w).Encode(resp)
 	return
 

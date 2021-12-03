@@ -1,11 +1,9 @@
 package service
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"log"
-	"time"
 
 	"github.com/yasensim/gameserver/internal/users"
 	database "github.com/yasensim/gameserver/internal/users/db"
@@ -35,10 +33,7 @@ func (db *UsersDB) CreateUser(user *users.User) error {
 	}
 	user.Password = string(pass)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	result, err := db.ExecContext(ctx, "insert into users(name,email,password)values(?,?,?)", user.Name, user.Email, user.Password)
+	result, err := db.Exec("insert into users(name,email,password)values(?,?,?)", user.Name, user.Email, user.Password)
 
 	if err != nil {
 		return err
@@ -57,11 +52,7 @@ func (db *UsersDB) CreateUser(user *users.User) error {
 func (db *UsersDB) GetAllUsers() ([]users.User, error) {
 	var theUsers []users.User
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	rows, err := db.QueryContext(ctx, "select id,name , email , password  from users")
-
+	rows, err := db.Query("select id,name , email , password  from users")
 	defer rows.Close()
 	if err != nil {
 		log.Print("error occued during users fetch ", err.Error())
@@ -82,11 +73,7 @@ func (db *UsersDB) FindUser(email, password string) (*users.User, error) {
 	if email == "" || password == "" {
 		return nil, errors.New("cant have empty email or password")
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	row := db.QueryRowContext(ctx, "select id,name,email,password from users where email = ?", email)
+	row := db.QueryRow("select id,name,email,password from users where email = ?", email)
 
 	err := row.Scan(&user.ID, &user.Name, &user.Email, &user.Password)
 
@@ -104,10 +91,7 @@ func (db *UsersDB) FindUser(email, password string) (*users.User, error) {
 
 func (db *UsersDB) UpdateUser(id string, user users.User) error {
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	result, err := db.ExecContext(ctx, "update users set name = ? , email= ? ,password = ? where id = ?", user.Name, user.Email, user.Password, id)
+	result, err := db.Exec("update users set name = ? , email= ? ,password = ? where id = ?", user.Name, user.Email, user.Password, id)
 	if err != nil {
 		log.Print("error occued during user update ", err.Error())
 		return err
@@ -124,10 +108,7 @@ func (db *UsersDB) UpdateUser(id string, user users.User) error {
 
 func (db *UsersDB) DeleteUser(id string) error {
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	result, err := db.ExecContext(ctx, "delete from users where id = ?", id)
+	result, err := db.Exec("delete from users where id = ?", id)
 	if err != nil {
 		log.Print("error occued during user update ", err.Error())
 		return err
@@ -144,10 +125,7 @@ func (db *UsersDB) GetUser(id string) (users.User, error) {
 
 	var user users.User
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	row := db.QueryRowContext(ctx, "select id,name,email,password from users where id=?", id)
+	row := db.QueryRow("select id,name,email,password from users where id=?", id)
 	err := row.Scan(&user.ID, &user.Name, &user.Email, &user.Password)
 
 	if err == sql.ErrNoRows {
