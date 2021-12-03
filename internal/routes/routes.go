@@ -33,12 +33,14 @@ func CommonMiddleware(next http.Handler) http.Handler {
 func Handlers() *mux.Router {
 	r := mux.NewRouter().StrictSlash(true)
 	r.Use(CommonMiddleware)
-	r.HandleFunc("/register", usersService.CreateUser).Methods("POST")
-	r.HandleFunc("/login", usersService.Login).Methods("POST")
-	r.HandleFunc("/user", usersService.FetchUsers).Methods("GET")
-	r.HandleFunc("/user/{id}", usersService.GetUser).Methods("GET")
-	r.HandleFunc("/user/{id}", usersService.UpdateUser).Methods("PUT")
-	r.HandleFunc("/user/{id}", usersService.DeleteUser).Methods("DELETE")
+	us := usersService.Get()
+
+	r.HandleFunc("/register", us.CreateUser).Methods("POST")
+	r.HandleFunc("/login", us.Login).Methods("POST")
+	r.HandleFunc("/user", us.FetchUsers).Methods("GET")
+	r.HandleFunc("/user/{id}", us.GetUser).Methods("GET")
+	r.HandleFunc("/user/{id}", us.UpdateUser).Methods("PUT")
+	r.HandleFunc("/user/{id}", us.DeleteUser).Methods("DELETE")
 	return r
 
 }
