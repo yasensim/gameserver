@@ -1,0 +1,17 @@
+
+Get Game Info:
+curl --include --no-buffer --header "Connection: Upgrade" --header "Upgrade: websocket" --header "Host: localhost" --header "Origin: http://localhost:5000" --header "Sec-WebSocket-Key: SGVsbG8sIHdvcmxkIQ==" --header "Sec-WebSocket-Version: 13" --header "x-access-token: XXX" http://localhost:5000/games/gameinfo?gameid=pokemoncards
+
+Bob Roberts Starts New Game:
+curl --include --no-buffer --header "Connection: Upgrade" --header "Upgrade: websocket" --header "Host: localhost" --header "Origin: http://localhost:5000" --header "Sec-WebSocket-Key: SGVsbG8sIHdvcmxkIQ==" --header "Sec-WebSocket-Version: 13" --header "x-access-token: XXX"  http://localhost:5000/games/startnewgame?gameid=pokemoncards --output -
+
+Melissa Testing Joins Game:
+curl --include --no-buffer --header "Connection: Upgrade" --header "Upgrade: websocket" --header "Host: localhost" --header "Origin: http://localhost:5000" --header "Sec-WebSocket-Key: SGVsbG8sIHdvcmxkIQ==" --header "Sec-WebSocket-Version: 13" --header "x-access-token: XXX"  http://localhost:5000/games/joingame/d6eea20f-5bfa-46d9-9f73-96b45c9fb85f --output -
+
+
+
+curl --include --no-buffer --header "Connection: Upgrade" --header "Upgrade: websocket" --header "Sec-WebSocket-Key: SGVsbG8sIHdvcmxkIQ==" --header "Sec-WebSocket-Version: 13" --header "x-access-token: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJVc2VySUQiOjEsIk5hbWUiOiJUZXN0IFVzZXIgMSIsIkVtYWlsIjoidGVzdDFAZ21haWwuY29tIiwiZXhwIjoxNjQ0NTc0NDE0fQ.sdnDL2_DE4wBRxi3Yp4U3DP_N77Afo4auuz2v5ViwOHXa_YD7smBBN_HlhNO4ut3rjxQxyzyyXHCda1RNAFOhDKDTQ0pupHSPppK9jzBMzfYBKT7yOsG-qOYYcLCLty-RdVWkKO8tLmhmH5a6C7xIUzKMODD4NzGA3Mgnkg8-yZJkXqmJc9tPEb8fKmkg3FQs_eIO69k2hsrtgBccSqDK0xVuvggnreQ7hhNh3K10WS8DWH2fkOK8y4nR1nTH76DVxHOfNys5fhg__H73Ls2wFADbiva4bdC6T2ceGQZllPFIbniMQLC9iJ63EuGEGESK1YxM4wdr2G1dIdU2E268g" http://ae6eb03dfbf584cf6be181edb2461834-1868028873.us-west-2.elb.amazonaws.com/games/gameinfo?gameid=pokemoncards
+curl --include --no-buffer --header "Connection: Upgrade" --header "Upgrade: websocket" --header "Sec-WebSocket-Key: SGVsbG8sIHdvcmxkIQ==" --header "Sec-WebSocket-Version: 13" --header "x-access-token:eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJVc2VySUQiOjEsIk5hbWUiOiJUZXN0IFVzZXIgMSIsIkVtYWlsIjoidGVzdDFAZ21haWwuY29tIiwiZXhwIjoxNjQ0NTc0NDE0fQ.sdnDL2_DE4wBRxi3Yp4U3DP_N77Afo4auuz2v5ViwOHXa_YD7smBBN_HlhNO4ut3rjxQxyzyyXHCda1RNAFOhDKDTQ0pupHSPppK9jzBMzfYBKT7yOsG-qOYYcLCLty-RdVWkKO8tLmhmH5a6C7xIUzKMODD4NzGA3Mgnkg8-yZJkXqmJc9tPEb8fKmkg3FQs_eIO69k2hsrtgBccSqDK0xVuvggnreQ7hhNh3K10WS8DWH2fkOK8y4nR1nTH76DVxHOfNys5fhg__H73Ls2wFADbiva4bdC6T2ceGQZllPFIbniMQLC9iJ63EuGEGESK1YxM4wdr2G1dIdU2E268g" http://ae6eb03dfbf584cf6be181edb2461834-1868028873.us-west-2.elb.amazonaws.com/games/startnewgame?gameid=pokemoncards --output -
+
+curl --include --no-buffer --header "Connection: Upgrade" --header "Upgrade: websocket" --header "Sec-WebSocket-Key: SGVsbG8sIHdvcmxkIQ==" --header "Sec-WebSocket-Version: 13" --header "x-access-token: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJVc2VySUQiOjEsIk5hbWUiOiJUZXN0IFVzZXIiLCJFbWFpbCI6InRlc3RAZ21haWwuY29tIiwiZXhwIjoxNjQ0NTc2Njc3fQ.J7gpMw25UVv2Dfqsc7AEt12PsTfnjOByAIk6Jto81z1yq2rKJRSTRE61aTw6XbL9jTsG4o354raTC2XmRn73LpCIlKPehZvFemEYi3Alea_Mf6XrrKnwDhwsb99r-4MdZ-XAPhRgN4hHVOqujsO41kwRu8a3SF9tBBzYL6r8QadICLv2naQ1zl-xkIoaew86KALJwiYDVxJwXMtYrZpHyLzhGwFvCNcxuiwpZTpl9De3zHlGAdgy5QIJ7A3BWbSeTghVqPcrIoL5x2wlSuStCTnPI2l30QDIPU3NcIMDgYKS8iZ0pLujQk6vWosaVuLTAtnKA78tSkCnwhXtpMM_pQ" http://ws.yasensim.net//games/startnewgame?gameid=pokemoncards --output -
+

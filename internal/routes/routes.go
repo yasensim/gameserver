@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	gamesService "github.com/yasensim/gameserver/internal/games/service"
 	"github.com/yasensim/gameserver/internal/users/auth"
 	usersService "github.com/yasensim/gameserver/internal/users/service"
 )
@@ -48,6 +49,13 @@ func Handlers() *mux.Router {
 	s.HandleFunc("/user/{id}", us.GetUser).Methods("GET")
 	s.HandleFunc("/user/{id}", us.UpdateUser).Methods("PUT")
 	s.HandleFunc("/user/{id}", us.DeleteUser).Methods("DELETE")
+	g := r.PathPrefix("/games").Subrouter()
+	g.Use(CommonMiddleware)
+	g.Use(jv.JwtVerify)
+	g.HandleFunc("/gameinfo", gamesService.GetGameInfo).Methods("GET")
+	g.HandleFunc("/startnewgame", gamesService.StartNewGame).Methods("GET")
+	g.HandleFunc("/joingame/{gametoken}", gamesService.JoinGame).Methods("GET")
+
 	return r
 
 }
