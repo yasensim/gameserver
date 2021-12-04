@@ -35,7 +35,7 @@ func (us *UsersService) Login(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	//	fmt.Printf("User: %s, Pass: %s", user.Email, user.Password)
+	fmt.Printf("User: %s, Pass: %s", user.Email, user.Password)
 	currUser, err := us.DB.FindUser(user.Email, user.Password)
 
 	if err != nil {
