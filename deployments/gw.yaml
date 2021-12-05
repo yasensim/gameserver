@@ -1,0 +1,15 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: ws-gateway
+  namespace: ws
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - hosts:
+    - ws.yasensim.net
+    port:
+      name: http
+      number: 80
+      protocol: HTTP

@@ -1,0 +1,17 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: webservice
+  namespace: ws
+spec:
+  gateways:
+  - ws-gateway
+  hosts:
+  - ws.yasensim.net
+  http:
+  - route:
+    - destination:
+        host: gameserver-service
+        port:
+          number: 80
+    websocketUpgrade: true
