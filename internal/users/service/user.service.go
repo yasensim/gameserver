@@ -3,222 +3,136 @@ package service
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
-	"sort"
-	"strconv"
-	"strings"
-	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/yasensim/gameserver/internal/users"
+	"github.com/yasensim/gameserver/internal/users/auth"
 )
 
-var userMap = struct {
-	m map[int]users.User
-}{m: make(map[int]users.User)}
+var usersService *UsersService
 
-func init() {
-	fmt.Println("loading users ...")
-	m, err := loadUserMap()
-	userMap.m = m
+func Get() *UsersService {
+	if usersService == nil {
+		usersService = &UsersService{DB: GetUsersDataStore(), JwtAuth: auth.GetAuthenticator()}
+		return usersService
+	}
+	return usersService
+}
+
+type UsersService struct {
+	DB      users.UserDatastore
+	JwtAuth users.UserAuth
+}
+
+func (us *UsersService) Login(w http.ResponseWriter, r *http.Request) {
+	user := &users.User{}
+	err := json.NewDecoder(r.Body).Decode(user)
+
 	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("%d users loaded\n", len(userMap.m))
-}
-
-func loadUserMap() (map[int]users.User, error) {
-	fileName := "users.json"
-	_, err := os.Stat(fileName)
-	if os.IsNotExist(err) {
-		return nil, fmt.Errorf("file [%s] does not exist", fileName)
-	}
-
-	file, _ := ioutil.ReadFile(fileName)
-	userList := make([]users.User, 0)
-	err = json.Unmarshal([]byte(file), &userList)
-	if err != nil {
-		log.Fatal(err)
-	}
-	uMap := make(map[int]users.User)
-	for i := 0; i < len(userList); i++ {
-		uMap[int(userList[i].ID)] = userList[i]
-	}
-	return uMap, nil
-}
-
-func getUser(userID uint) *users.User {
-
-	if user, ok := userMap.m[int(userID)]; ok {
-		return &user
-	}
-	return nil
-}
-
-func removeUser(userID int) {
-	delete(userMap.m, userID)
-}
-func getUserList() []users.User {
-	users := make([]users.User, 0, len(userMap.m))
-	for _, value := range userMap.m {
-		users = append(users, value)
-	}
-	return users
-}
-func getUserIds() []int {
-	userIds := []int{}
-	for key := range userMap.m {
-		userIds = append(userIds, key)
-	}
-	sort.Ints(userIds)
-	return userIds
-}
-func getNextUserID() int {
-	userIds := getUserIds()
-	return userIds[len(userIds)-1] + 1
-}
-func addOrUpdateUser(user users.User) (int, error) {
-	addOrUpdateID := -1
-	if user.ID > 0 {
-		oldUser := getUser(user.ID)
-		if oldUser == nil {
-			return 0, fmt.Errorf("user id [%d] doesnt exist", user.ID)
-		}
-		addOrUpdateID = int(user.ID)
-	} else {
-		addOrUpdateID = getNextUserID()
-		user.ID = uint(addOrUpdateID)
-	}
-	userMap.m[addOrUpdateID] = user
-	return addOrUpdateID, nil
-}
-func printHeaders(r *http.Request) {
-	fmt.Printf("Request at %v\n", time.Now())
-	for k, v := range r.Header {
-		fmt.Printf("%v: %v\n", k, v)
-	}
-}
-func CreateUser(w http.ResponseWriter, r *http.Request) {
-	printHeaders(r)
-	var user users.User
-	err := json.NewDecoder(r.Body).Decode(&user)
-	if err != nil {
-		log.Print(err)
+		log.Println(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	_, err = addOrUpdateUser(user)
+	fmt.Printf("User: %s, Pass: %s", user.Email, user.Password)
+	currUser, err := us.DB.FindUser(user.Email, user.Password)
+
 	if err != nil {
-		log.Print(err)
-		w.WriteHeader(http.StatusBadRequest)
+		log.Print("error occued FindUser ", err.Error())
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-}
-func FetchUsers(w http.ResponseWriter, r *http.Request) {
-	printHeaders(r)
-	usersList := getUserList()
-	j, err := json.Marshal(usersList)
-	if err != nil {
-		log.Fatal(err)
-	}
-	_, err = w.Write(j)
-	if err != nil {
-		log.Fatal(err)
-	}
+	tokenString, err := us.JwtAuth.GetTokenForUser(currUser)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:       auth.TokenName,
+		Value:      tokenString,
+		Path:       "/",
+		RawExpires: "0",
+	})
+	var resp = map[string]interface{}{"status": true, "access-token": tokenString, "user": currUser}
+	json.NewEncoder(w).Encode(resp)
 }
 
-func ParseURL(w http.ResponseWriter, r *http.Request) int {
-	printHeaders(r)
-	urlPart := strings.Split(r.URL.Path, fmt.Sprintf("user/"))
-	if len(urlPart[1:]) > 1 {
-		w.WriteHeader(http.StatusBadRequest)
-		return 0
-	}
-	userID, err := strconv.Atoi(urlPart[len(urlPart)-1])
-	if err != nil {
-		log.Print(err)
-		w.WriteHeader(http.StatusNotFound)
-		return 0
-	}
-	return userID
-}
-func UpdateUser(w http.ResponseWriter, r *http.Request) {
-	userID := ParseURL(w, r)
-	if userID == 0 {
-		return
-	}
-	var user users.User
-	err := json.NewDecoder(r.Body).Decode(&user)
-	if err != nil {
-		log.Print(err)
-		w.WriteHeader(http.StatusNotFound)
-	}
-	if user.ID != uint(userID) {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-	_, err = addOrUpdateUser(user)
-	if err != nil {
-		log.Print(err)
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-}
-func DeleteUser(w http.ResponseWriter, r *http.Request) {
-	userID := ParseURL(w, r)
-	if userID == 0 {
-		return
-	}
-	removeUser(userID)
-}
-func GetUser(w http.ResponseWriter, r *http.Request) {
-	userID := ParseURL(w, r)
-	if userID == 0 {
-		return
-	}
-	user := getUser(uint(userID))
-	if user == nil {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-	j, err := json.Marshal(user)
-	if err != nil {
-		log.Print(err)
+//CreateUser function -- create a new user
+func (us *UsersService) CreateUser(w http.ResponseWriter, r *http.Request) {
+
+	user := &users.User{}
+	json.NewDecoder(r.Body).Decode(user)
+
+	_, err := us.DB.FindUser(user.Email, user.Password)
+
+	if err == nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	_, err = w.Write(j)
+	fmt.Printf("FROM Create User - User: %s, Pass: %s", user.Email, user.Password)
+	if err := us.DB.CreateUser(user); err != nil {
+		log.Print("error occued CreateUser ", err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+
+	tokenString, err := us.JwtAuth.GetTokenForUser(user)
+	var resp = map[string]interface{}{"status": true, "user": user, "access-token": tokenString}
+	json.NewEncoder(w).Encode(resp)
+	return
+
+}
+
+//FetchUser function
+func (us *UsersService) FetchUsers(w http.ResponseWriter, r *http.Request) {
+
+	theUsers, err := us.DB.GetAllUsers()
 	if err != nil {
-		log.Fatal(err)
-	}
-}
-func HandleUsers(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		FetchUsers(w, r)
-	case http.MethodPost:
-		CreateUser(w, r)
-		w.WriteHeader(http.StatusCreated)
-	case http.MethodOptions:
+		log.Print("error occued during FetchUsers ", err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
 		return
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+	json.NewEncoder(w).Encode(theUsers)
 }
-func HandleUser(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		GetUser(w, r)
-	case http.MethodPut:
-		UpdateUser(w, r)
-		w.WriteHeader(http.StatusCreated)
-	case http.MethodDelete:
-		DeleteUser(w, r)
-	case http.MethodOptions:
+
+func (us *UsersService) UpdateUser(w http.ResponseWriter, r *http.Request) {
+
+	user := users.User{}
+	params := mux.Vars(r)
+	var id = params["id"]
+
+	json.NewDecoder(r.Body).Decode(&user)
+
+	if err := us.DB.UpdateUser(id, user); err != nil {
+		log.Print("error occued during user update ", err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
 		return
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+
+	json.NewEncoder(w).Encode(&user)
+}
+
+func (us *UsersService) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	var id = params["id"]
+
+	if err := us.DB.DeleteUser(id); err != nil {
+		log.Print("error occued during user delete ", err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode("User deleted")
+}
+
+func (us *UsersService) GetUser(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	var id = params["id"]
+
+	user, err := us.DB.GetUser(id)
+
+	if err != nil {
+		log.Print("error occued during user delete ", err.Error())
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	json.NewEncoder(w).Encode(&user)
 }

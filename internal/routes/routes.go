@@ -3,31 +3,27 @@ package routes
 import (
 	"fmt"
 	"net/http"
-	"time"
 
-	"github.com/yasensim/gameserver/internal/users/service"
+	"github.com/gorilla/mux"
+	gamesService "github.com/yasensim/gameserver/internal/games/service"
+	"github.com/yasensim/gameserver/internal/users/auth"
+	usersService "github.com/yasensim/gameserver/internal/users/service"
 )
 
-func printHeaders(r *http.Request) {
-	fmt.Printf("Request at %v\n", time.Now())
-	for k, v := range r.Header {
-		fmt.Printf("%v: %v\n", k, v)
-	}
-}
-
-func welcome(w http.ResponseWriter, r *http.Request) {
-	printHeaders(r)
-	w.Write([]byte("welcome to go!!!"))
-}
-
-func greet(w http.ResponseWriter, r *http.Request) {
-	printHeaders(r)
-	w.Write([]byte("Hello from go"))
-}
+//func printHeaders(r *http.Request) {
+//	fmt.Printf("Request at %v\n", time.Now())
+//	for k, v := range r.Header {
+//		fmt.Printf("%v: %v\n", k, v)
+//	}
+//}
 
 // CommonMiddleware --Set content-type
 func CommonMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Printf("Req from middleware: %s \n", r.Header.Get("test"))
+		if len(r.Header.Get("test")) > 0 {
+			w.Header().Add("test", r.Header.Get("test"))
+		}
 		w.Header().Add("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
@@ -36,13 +32,30 @@ func CommonMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func Handlers() {
-	http.HandleFunc("/welcome", welcome)
-	http.Handle("/greet", http.HandlerFunc(greet))
-	usersHandler := http.HandlerFunc(service.HandleUsers)
-	userHandler := http.HandlerFunc(service.HandleUser)
+func Handlers() *mux.Router {
+	r := mux.NewRouter().StrictSlash(true)
+	r.Use(CommonMiddleware)
 
-	http.Handle("/users", CommonMiddleware(usersHandler))
-	http.Handle("/user/", CommonMiddleware(userHandler))
+	us := usersService.Get()
+	jv := auth.GetAuthenticator()
+
+	r.HandleFunc("/register", us.CreateUser).Methods("POST")
+	r.HandleFunc("/login", us.Login).Methods("POST")
+
+	s := r.PathPrefix("/auth").Subrouter()
+	s.Use(jv.JwtVerify)
+
+	s.HandleFunc("/user", us.FetchUsers).Methods("GET")
+	s.HandleFunc("/user/{id}", us.GetUser).Methods("GET")
+	s.HandleFunc("/user/{id}", us.UpdateUser).Methods("PUT")
+	s.HandleFunc("/user/{id}", us.DeleteUser).Methods("DELETE")
+	g := r.PathPrefix("/games").Subrouter()
+	g.Use(CommonMiddleware)
+	g.Use(jv.JwtVerify)
+	g.HandleFunc("/gameinfo", gamesService.GetGameInfo).Methods("GET")
+	g.HandleFunc("/startnewgame", gamesService.StartNewGame).Methods("GET")
+	g.HandleFunc("/joingame/{gametoken}", gamesService.JoinGame).Methods("GET")
+
+	return r
 
 }

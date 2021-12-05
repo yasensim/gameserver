@@ -1,0 +1,81 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: game-frontend
+  namespace: game-frontend
+spec:
+  selector:
+    matchLabels:
+      app: game-frontend
+  template:
+    metadata:
+      labels:
+        app: game-frontend
+      annotations:
+        sidecar.istio.io/rewriteAppHTTPProbers: "true"
+    spec:
+      serviceAccountName: default
+      containers:
+        - name: frontend
+          image: motisoffer/pokemongame:1.0
+          ports:
+          - containerPort: 3002
+          env:
+          - name: GAMES_SERVER_URL
+            value: "ws.yasensim.net:80"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: game-frontend
+  namespace: game-frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: game-frontend
+  ports:
+  - name: http
+    port: 80
+    targetPort: 3002
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: game-gateway
+  namespace: game-frontend
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - hosts:
+    - game.yasensim.net
+    port:
+      name: http
+      number: 80
+      protocol: HTTP
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: game-vs
+  namespace: game-frontend
+spec:
+  gateways:
+  - game-gateway
+  hosts:
+  - game.yasensim.net
+  http:
+  - route:
+    - destination:
+        host: game-frontend
+        port:
+          number: 80

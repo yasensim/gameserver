@@ -8,9 +8,9 @@ import (
 )
 
 func main() {
-	routes.Handlers()
+	r := routes.Handlers()
 
-	err := http.ListenAndServe(":5000", nil)
+	err := http.ListenAndServe(":8080", r)
 	if err != nil {
 		log.Fatal(err)
 	}
